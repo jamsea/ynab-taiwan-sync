@@ -1,19 +1,36 @@
+export interface ParsedTransaction {
+  transactionDate: string | null;
+  emailDate?: string;
+  merchant: string;
+  amount: number;
+  cardLast4: string;
+}
+
+export interface YnabTransaction {
+  account_id: string;
+  date: string;
+  amount: number;
+  payee_name: string;
+  memo: string;
+  cleared: "cleared" | "uncleared" | "reconciled";
+  import_id: string;
+}
+
 /**
  * Transform parsed Cathay bank transactions into YNAB API transaction format.
  *
  * YNAB uses milliunits: 1 TWD = 1000 milliunits.
  * Spending (outflows) are negative.
- *
- * @param {Array<Object>} parsedTransactions - Output from parseCathayEmail()
- * @param {string} accountId - YNAB account ID
- * @returns {Array<Object>} YNAB-formatted transactions
  */
-function transformToYnab(parsedTransactions, accountId) {
+export function transformToYnab(
+  parsedTransactions: ParsedTransaction[],
+  accountId: string | null,
+): YnabTransaction[] {
   if (!accountId) {
     throw new Error("YNAB account_id is required");
   }
 
-  const transactions = [];
+  const transactions: YnabTransaction[] = [];
 
   for (const tx of parsedTransactions) {
     const isoDate = normalizeDate(tx.transactionDate, tx.emailDate);
@@ -24,7 +41,7 @@ function transformToYnab(parsedTransactions, accountId) {
     const baseImportId = `YNAB:${milliunits}:${isoDate}`;
     const occurrence =
       transactions.filter(
-        (t) => t.import_id && t.import_id.startsWith(baseImportId)
+        (t) => t.import_id.startsWith(baseImportId),
       ).length + 1;
 
     transactions.push({
@@ -45,50 +62,44 @@ function transformToYnab(parsedTransactions, accountId) {
  * Normalize a date string to ISO 8601 (YYYY-MM-DD).
  * Handles YYYY/MM/DD, YYYY-MM-DD, and MM/DD/YYYY formats.
  * Falls back to emailDate or today's date.
- *
- * @param {string} dateStr - Transaction date string
- * @param {string} fallbackDate - Fallback date (email received date)
- * @returns {string} ISO 8601 date string (YYYY-MM-DD)
  */
-function normalizeDate(dateStr, fallbackDate) {
+export function normalizeDate(
+  dateStr: string | null | undefined,
+  fallbackDate?: string | null,
+): string {
   if (!dateStr && !fallbackDate) {
-    return new Date().toISOString().split("T")[0];
+    return new Date().toISOString().split("T")[0]!;
   }
 
-  const str = dateStr || "";
+  const str = dateStr ?? "";
 
   // YYYY/MM/DD or YYYY-MM-DD
   const ymdMatch = str.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
   if (ymdMatch) {
-    return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, "0")}-${ymdMatch[3].padStart(2, "0")}`;
+    return `${ymdMatch[1]}-${ymdMatch[2]!.padStart(2, "0")}-${ymdMatch[3]!.padStart(2, "0")}`;
   }
 
   // MM/DD/YYYY
   const mdyMatch = str.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
   if (mdyMatch) {
-    return `${mdyMatch[3]}-${mdyMatch[1].padStart(2, "0")}-${mdyMatch[2].padStart(2, "0")}`;
+    return `${mdyMatch[3]}-${mdyMatch[1]!.padStart(2, "0")}-${mdyMatch[2]!.padStart(2, "0")}`;
   }
 
   // Fallback to email date
   if (fallbackDate) {
     const d = new Date(fallbackDate);
     if (!isNaN(d.getTime())) {
-      return d.toISOString().split("T")[0];
+      return d.toISOString().split("T")[0]!;
     }
   }
 
-  return new Date().toISOString().split("T")[0];
+  return new Date().toISOString().split("T")[0]!;
 }
 
 /**
  * Convert a TWD amount to YNAB milliunits.
  * Spending amounts become negative (outflows).
- *
- * @param {number} amount - The TWD amount (positive = spending)
- * @returns {number} Milliunits (negative for outflows)
  */
-function toMilliunits(amount) {
+export function toMilliunits(amount: number): number {
   return Math.round(amount * -1000);
 }
-
-module.exports = { transformToYnab, normalizeDate, toMilliunits };

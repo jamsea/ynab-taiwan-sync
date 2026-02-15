@@ -4,7 +4,14 @@
   "description": "Sync Cathay United Bank (Taiwan) transactions to YNAB via n8n",
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
 }

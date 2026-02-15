@@ -1,10 +1,10 @@
-const { describe, it } = require("node:test");
-const assert = require("node:assert/strict");
-const {
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
   transformToYnab,
   normalizeDate,
   toMilliunits,
-} = require("../src/transformToYnab");
+} from "../src/transformToYnab.js";
 
 describe("toMilliunits", () => {
   it("converts positive amount to negative milliunits (outflow)", () => {
@@ -62,7 +62,7 @@ describe("normalizeDate", () => {
   it("handles ISO datetime as fallback", () => {
     assert.equal(
       normalizeDate(null, "2025-12-25T23:59:59.000Z"),
-      "2025-12-25"
+      "2025-12-25",
     );
   });
 });
@@ -98,13 +98,13 @@ describe("transformToYnab", () => {
     const result = transformToYnab(input, ACCOUNT_ID);
 
     assert.equal(result.length, 1);
-    assert.equal(result[0].account_id, ACCOUNT_ID);
-    assert.equal(result[0].date, "2025-01-15");
-    assert.equal(result[0].amount, -150000);
-    assert.equal(result[0].payee_name, "星巴克 信義店");
-    assert.equal(result[0].memo, "Card: ****4321");
-    assert.equal(result[0].cleared, "cleared");
-    assert.equal(result[0].import_id, "YNAB:-150000:2025-01-15:1");
+    assert.equal(result[0]!.account_id, ACCOUNT_ID);
+    assert.equal(result[0]!.date, "2025-01-15");
+    assert.equal(result[0]!.amount, -150000);
+    assert.equal(result[0]!.payee_name, "星巴克 信義店");
+    assert.equal(result[0]!.memo, "Card: ****4321");
+    assert.equal(result[0]!.cleared, "cleared");
+    assert.equal(result[0]!.import_id, "YNAB:-150000:2025-01-15:1");
   });
 
   it("handles multiple transactions", () => {
@@ -125,8 +125,8 @@ describe("transformToYnab", () => {
 
     const result = transformToYnab(input, ACCOUNT_ID);
     assert.equal(result.length, 2);
-    assert.equal(result[0].payee_name, "Store A");
-    assert.equal(result[1].payee_name, "Store B");
+    assert.equal(result[0]!.payee_name, "Store A");
+    assert.equal(result[1]!.payee_name, "Store B");
   });
 
   it("generates unique import_ids for same amount on same date", () => {
@@ -146,8 +146,8 @@ describe("transformToYnab", () => {
     ];
 
     const result = transformToYnab(input, ACCOUNT_ID);
-    assert.equal(result[0].import_id, "YNAB:-50000:2025-01-15:1");
-    assert.equal(result[1].import_id, "YNAB:-50000:2025-01-15:2");
+    assert.equal(result[0]!.import_id, "YNAB:-50000:2025-01-15:1");
+    assert.equal(result[1]!.import_id, "YNAB:-50000:2025-01-15:2");
   });
 
   it("sets empty memo when no card info", () => {
@@ -161,7 +161,7 @@ describe("transformToYnab", () => {
     ];
 
     const result = transformToYnab(input, ACCOUNT_ID);
-    assert.equal(result[0].memo, "");
+    assert.equal(result[0]!.memo, "");
   });
 
   it("uses emailDate fallback when transactionDate is missing", () => {
@@ -176,7 +176,7 @@ describe("transformToYnab", () => {
     ];
 
     const result = transformToYnab(input, ACCOUNT_ID);
-    assert.equal(result[0].date, "2025-03-10");
+    assert.equal(result[0]!.date, "2025-03-10");
   });
 
   it("handles decimal amounts correctly", () => {
@@ -190,6 +190,6 @@ describe("transformToYnab", () => {
     ];
 
     const result = transformToYnab(input, ACCOUNT_ID);
-    assert.equal(result[0].amount, -29990);
+    assert.equal(result[0]!.amount, -29990);
   });
 });

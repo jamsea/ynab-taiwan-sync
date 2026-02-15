@@ -1,10 +1,10 @@
-const { describe, it } = require("node:test");
-const assert = require("node:assert/strict");
-const {
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
   parseCathayEmail,
   stripHtml,
   extractTransactionFields,
-} = require("../src/parseCathayEmail");
+} from "../src/parseCathayEmail.js";
 
 describe("stripHtml", () => {
   it("removes HTML tags", () => {
@@ -109,14 +109,14 @@ describe("parseCathayEmail", () => {
 
     assert.equal(result.length, 2);
 
-    assert.equal(result[0].transactionDate, "2025/01/15");
-    assert.equal(result[0].merchant, "星巴克 信義店");
-    assert.equal(result[0].amount, 150);
-    assert.equal(result[0].cardLast4, "4321");
-    assert.equal(result[0].messageId, "msg123");
+    assert.equal(result[0]!.transactionDate, "2025/01/15");
+    assert.equal(result[0]!.merchant, "星巴克 信義店");
+    assert.equal(result[0]!.amount, 150);
+    assert.equal(result[0]!.cardLast4, "4321");
+    assert.equal(result[0]!.messageId, "msg123");
 
-    assert.equal(result[1].merchant, "全家便利商店");
-    assert.equal(result[1].amount, 75);
+    assert.equal(result[1]!.merchant, "全家便利商店");
+    assert.equal(result[1]!.amount, 75);
   });
 
   it("skips header rows containing 日期 or 交易", () => {
@@ -129,7 +129,7 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-01-20", "msg2");
     assert.equal(result.length, 1);
-    assert.equal(result[0].merchant, "7-ELEVEN");
+    assert.equal(result[0]!.merchant, "7-ELEVEN");
   });
 
   it("falls back to generic tables when no spend_table class", () => {
@@ -141,8 +141,8 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-02-01", "msg3");
     assert.equal(result.length, 1);
-    assert.equal(result[0].merchant, "IKEA");
-    assert.equal(result[0].amount, 3500);
+    assert.equal(result[0]!.merchant, "IKEA");
+    assert.equal(result[0]!.amount, 3500);
   });
 
   it("uses emailDate as fallback when transaction has no date", () => {
@@ -154,8 +154,8 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-03-10", "msg4");
     assert.equal(result.length, 1);
-    assert.equal(result[0].transactionDate, "2025-03-10");
-    assert.equal(result[0].merchant, "家樂福");
+    assert.equal(result[0]!.transactionDate, "2025-03-10");
+    assert.equal(result[0]!.merchant, "家樂福");
   });
 
   it("handles HTML entities inside cells", () => {
@@ -167,7 +167,7 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-01-15", "msg5");
     assert.equal(result.length, 1);
-    assert.equal(result[0].merchant, "H&M");
+    assert.equal(result[0]!.merchant, "H&M");
   });
 
   it("handles nested HTML tags inside cells", () => {
@@ -184,9 +184,9 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-04-01", "msg6");
     assert.equal(result.length, 1);
-    assert.equal(result[0].merchant, "UNIQLO");
-    assert.equal(result[0].amount, 590);
-    assert.equal(result[0].cardLast4, "5678");
+    assert.equal(result[0]!.merchant, "UNIQLO");
+    assert.equal(result[0]!.amount, 590);
+    assert.equal(result[0]!.cardLast4, "5678");
   });
 
   it("skips rows with fewer than 3 cells", () => {
@@ -200,7 +200,7 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-01-15", "msg7");
     assert.equal(result.length, 1);
-    assert.equal(result[0].merchant, "OK Mart");
+    assert.equal(result[0]!.merchant, "OK Mart");
   });
 
   it("parses multiple tables in one email", () => {
@@ -215,7 +215,7 @@ describe("parseCathayEmail", () => {
 
     const result = parseCathayEmail(html, "2025-01-10", "msg8");
     assert.equal(result.length, 2);
-    assert.equal(result[0].merchant, "Store A");
-    assert.equal(result[1].merchant, "Store B");
+    assert.equal(result[0]!.merchant, "Store A");
+    assert.equal(result[1]!.merchant, "Store B");
   });
 });
