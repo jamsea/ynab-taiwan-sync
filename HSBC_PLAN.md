@@ -10,7 +10,7 @@ The existing codebase syncs **Cathay United Bank** (國泰世華銀行) transact
 |--------|-------------------|-------------|
 | Email type | Daily consolidated summary | Per-transaction alert |
 | Email subject | `國泰世華銀行消費彙整通知` | `匯豐銀行信用卡交易警示` |
-| Sender | `service@pxbillrc01.cathaybk.com.tw` | TBD (likely `*@hsbc.com.tw`) |
+| Sender | `service@pxbillrc01.cathaybk.com.tw` | `enotification@mail.hsbc.com.tw` |
 | Format | HTML table with class `spend_table` | Unknown — likely simple HTML or plain text |
 | Transactions per email | Multiple (batched) | One (single transaction) |
 | Notification threshold | All transactions | Domestic in-person >= NT$3,000; all online/overseas |
@@ -96,11 +96,10 @@ Schedule (every 6h)
 ```
 
 **Differences from Cathay workflow:**
-- Gmail filter: `from:*@hsbc.com.tw subject:匯豐銀行信用卡交易警示 is:unread`
-  - Sender address TBD — use wildcard `@hsbc.com.tw` initially
+- Gmail filter: `from:enotification@mail.hsbc.com.tw subject:匯豐銀行信用卡交易警示 is:unread`
 - Parse node: uses `parseHsbcEmail` logic instead of `parseCathayEmail`
 - Transform node: identical (same `transformToYnab` logic)
-- YNAB POST node: may use same or different `YNAB_ACCOUNT_ID` depending on user setup
+- YNAB POST node: uses the same `YNAB_ACCOUNT_ID` as the Cathay workflow
 
 ### 8. Update `README.md`
 
@@ -124,8 +123,12 @@ Schedule (every 6h)
 | `workflows/hsbc-to-ynab.json` | **Create** | n8n workflow for HSBC |
 | `README.md` | **Modify** | Add HSBC documentation |
 
+## Confirmed Details
+
+- **Email sender**: `enotification@mail.hsbc.com.tw`
+- **YNAB account**: Same account as Cathay workflow (shared `YNAB_ACCOUNT_ID`)
+- **Email HTML template**: To be provided by user — parser will be finalized once a real sample is available
+
 ## Open Questions
 
-1. **Exact email sender address** — Need to confirm the `From:` address for HSBC Taiwan transaction alerts (likely `*@hsbc.com.tw` or `*@email.hsbc.com.tw`)
-2. **Exact email HTML structure** — Need a real sample email to finalize the parser. The initial implementation will be best-guess and should be validated against real data.
-3. **YNAB account setup** — Should HSBC transactions go to the same YNAB account as Cathay, or a separate one? (This is a user configuration choice, not a code decision.)
+1. **Exact email HTML structure** — Awaiting a real sample email from user. The initial implementation will use a best-guess structure and be updated once a real sample is provided.
