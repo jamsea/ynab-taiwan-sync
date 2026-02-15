@@ -1,0 +1,271 @@
+{
+  "name": "Cathay Bank → YNAB Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Run Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 20,
+        "filters": {
+          "q": "from:service@pxbillrc01.cathaybk.com.tw subject:國泰世華銀行消費彙整通知 is:unread",
+          "includeSpamTrash": false
+        },
+        "options": {
+          "dataPropertyAttachmentsPrefixName": "attachment_",
+          "downloadAttachments": false
+        }
+      },
+      "id": "gmail-fetch",
+      "name": "Fetch Cathay Emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [220, 0],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CONFIGURE_ME",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-html-body",
+              "leftValue": "={{ $json.textHtml }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-valid",
+      "name": "Has HTML Body?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Cathay United Bank spending summary email HTML\n// Extracts individual transactions from the consolidated daily email\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const html = item.json.textHtml || '';\n  const emailDate = item.json.date;\n  const messageId = item.json.id;\n\n  // Extract transaction rows from .spend_table elements\n  // Cathay emails use HTML tables with class 'spend_table'\n  // Each table contains: date, merchant, amount, card last 4 digits\n  const tableRegex = /class=[\"']spend_table[\"'][^>]*>(.*?)<\\/table>/gis;\n  const rowRegex = /<tr[^>]*>(.*?)<\\/tr>/gis;\n  const cellRegex = /<td[^>]*>(.*?)<\\/td>/gis;\n\n  // Fallback: if no .spend_table, try to parse any structured transaction data\n  let tables = [...html.matchAll(tableRegex)];\n\n  if (tables.length === 0) {\n    // Alternative pattern: look for transaction-like content in generic tables\n    // Cathay emails may also use inline styles instead of classes\n    const altTableRegex = /<table[^>]*>(.*?)<\\/table>/gis;\n    tables = [...html.matchAll(altTableRegex)];\n  }\n\n  for (const table of tables) {\n    const tableHtml = table[1] || table[0];\n    const rows = [...tableHtml.matchAll(rowRegex)];\n\n    for (const row of rows) {\n      const rowHtml = row[1] || row[0];\n      const cells = [...rowHtml.matchAll(cellRegex)];\n      const cellValues = cells.map(c => {\n        // Strip HTML tags and decode entities\n        return (c[1] || '')\n          .replace(/<[^>]*>/g, '')\n          .replace(/&nbsp;/g, ' ')\n          .replace(/&amp;/g, '&')\n          .replace(/&lt;/g, '<')\n          .replace(/&gt;/g, '>')\n          .replace(/&#\\d+;/g, '')\n          .trim();\n      });\n\n      // Skip header rows and empty rows\n      if (cellValues.length < 3) continue;\n      if (cellValues.some(v => /日期|時間|交易|Date/i.test(v))) continue;\n\n      // Try to identify transaction fields\n      // Common patterns: [date, merchant, amount] or [date, merchant, amount, card]\n      let txDate = null;\n      let merchant = null;\n      let amount = null;\n      let cardLast4 = null;\n\n      for (const val of cellValues) {\n        // Date pattern: YYYY/MM/DD or MM/DD or YYYY-MM-DD\n        if (!txDate && /\\d{2,4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2}/.test(val)) {\n          txDate = val;\n        }\n        // Amount pattern: numbers with optional comma/decimal, possibly with NT$ or TWD\n        else if (!amount && /[\\d,]+\\.?\\d*/.test(val) && /\\d{2,}/.test(val.replace(/,/g, ''))) {\n          amount = val.replace(/[^\\d.\\-]/g, '');\n        }\n        // Card last 4 digits\n        else if (!cardLast4 && /^\\d{4}$/.test(val.trim())) {\n          cardLast4 = val.trim();\n        }\n        // Merchant name: whatever's left that isn't a number or date\n        else if (!merchant && val.length > 1 && !/^[\\d\\s.,\\/\\-]+$/.test(val)) {\n          merchant = val;\n        }\n      }\n\n      if (amount && (merchant || txDate)) {\n        items.push({\n          json: {\n            messageId,\n            emailDate,\n            transactionDate: txDate || emailDate,\n            merchant: merchant || 'Unknown',\n            amount: parseFloat(amount),\n            cardLast4: cardLast4 || '',\n            rawCells: cellValues\n          }\n        });\n      }\n    }\n  }\n}\n\nif (items.length === 0) {\n  items.push({\n    json: {\n      error: 'No transactions parsed from email(s)',\n      emailCount: $input.all().length\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "parse-email",
+      "name": "Parse Cathay Email HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-amount",
+              "leftValue": "={{ $json.amount }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists"
+              }
+            },
+            {
+              "id": "no-error",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-parsed",
+      "name": "Valid Transactions Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform parsed Cathay transactions into YNAB API format\n// YNAB uses milliunits: 1 TWD = 1000 milliunits\n// Spending is negative (outflow)\n\n// Configuration - UPDATE THESE VALUES\nconst YNAB_ACCOUNT_ID = '{{ $env.YNAB_ACCOUNT_ID || \"CONFIGURE_ME\" }}';\n\nconst transactions = [];\n\nfor (const item of $input.all()) {\n  const tx = item.json;\n\n  // Parse and normalize the date to ISO 8601 (YYYY-MM-DD)\n  let isoDate;\n  const dateStr = tx.transactionDate || '';\n\n  if (/\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2}/.test(dateStr)) {\n    // YYYY/MM/DD or YYYY-MM-DD\n    const parts = dateStr.split(/[\\/\\-]/);\n    isoDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;\n  } else if (/\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{4}/.test(dateStr)) {\n    // MM/DD/YYYY\n    const parts = dateStr.split(/[\\/\\-]/);\n    isoDate = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;\n  } else {\n    // Fallback to email date\n    const d = new Date(tx.emailDate);\n    isoDate = d.toISOString().split('T')[0];\n  }\n\n  // Convert amount to milliunits (negative for outflows/spending)\n  const milliunits = Math.round(tx.amount * -1000);\n\n  // Build memo from card info\n  const memo = tx.cardLast4 ? `Card: ****${tx.cardLast4}` : '';\n\n  // Generate import_id for deduplication\n  // Format: YNAB:milliunit_amount:iso_date:occurrence\n  // Count occurrences of same amount on same date for the occurrence number\n  const baseImportId = `YNAB:${milliunits}:${isoDate}`;\n  const occurrence = transactions.filter(t =>\n    t.import_id && t.import_id.startsWith(baseImportId)\n  ).length + 1;\n\n  transactions.push({\n    account_id: YNAB_ACCOUNT_ID,\n    date: isoDate,\n    amount: milliunits,\n    payee_name: tx.merchant,\n    memo: memo,\n    cleared: 'cleared',\n    import_id: `${baseImportId}:${occurrence}`\n  });\n}\n\nreturn [{\n  json: {\n    transactions: transactions\n  }\n}];"
+      },
+      "id": "transform-ynab",
+      "name": "Transform to YNAB Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.youneedabudget.com/v1/budgets/{{ $env.YNAB_BUDGET_ID || 'CONFIGURE_ME' }}/transactions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "ynab-post",
+      "name": "POST to YNAB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "YNAB API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabel",
+        "messageId": "={{ $('Parse Cathay Email HTML').first().json.messageId }}",
+        "labelIds": ["INBOX"]
+      },
+      "id": "gmail-mark-read",
+      "name": "Mark Email as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1540, 0],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CONFIGURE_ME",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Cathay Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Cathay Emails": {
+      "main": [
+        [
+          {
+            "node": "Has HTML Body?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has HTML Body?": {
+      "main": [
+        [
+          {
+            "node": "Parse Cathay Email HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Cathay Email HTML": {
+      "main": [
+        [
+          {
+            "node": "Valid Transactions Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Transactions Only": {
+      "main": [
+        [
+          {
+            "node": "Transform to YNAB Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform to YNAB Format": {
+      "main": [
+        [
+          {
+            "node": "POST to YNAB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST to YNAB": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "tags": [
+    {
+      "name": "finance",
+      "id": "1"
+    },
+    {
+      "name": "ynab",
+      "id": "2"
+    }
+  ]
+}
