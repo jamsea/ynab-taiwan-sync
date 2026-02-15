@@ -1,20 +1,22 @@
 # ynab-taiwan-sync
 
-Sync Cathay United Bank (國泰世華銀行) transactions to [YNAB](https://ynab.com) using self-hosted [n8n](https://n8n.io).
+Sync Taiwan bank transactions to [YNAB](https://ynab.com) using self-hosted [n8n](https://n8n.io).
+
+**Supported banks:**
+- **Cathay United Bank** (國泰世華銀行) — daily consolidated spending summary emails
+- **HSBC Taiwan** (匯豐銀行台灣) — per-transaction credit card alert emails *(parser pending — awaiting email sample)*
 
 ## How It Works
 
-Cathay United Bank sends a daily consolidated spending summary email ("國泰世華銀行消費彙整通知") that contains all credit/debit card transactions for the day in an HTML table.
+Each supported bank has its own n8n workflow that:
 
-This project uses an n8n workflow to:
+1. **Fetches** unread bank notification emails from Gmail
+2. **Parses** the HTML to extract transaction details (date, merchant, amount, card)
+3. **Transforms** transactions into YNAB API format (milliunits, deduplication IDs)
+4. **POSTs** transactions to YNAB via the API
+5. **Marks** processed emails as read
 
-1. **Fetch** unread Cathay spending summary emails from Gmail
-2. **Parse** the HTML tables to extract individual transactions (date, merchant, amount, card)
-3. **Transform** transactions into YNAB API format (milliunits, deduplication IDs)
-4. **POST** transactions to YNAB via the API
-5. **Mark** processed emails as read
-
-The workflow runs on a schedule (default: every 6 hours).
+The workflows run on a schedule (default: every 6 hours).
 
 ## Prerequisites
 
@@ -60,7 +62,9 @@ n8n will be available at `http://localhost:5678`.
 2. Click **New Token** to generate a Personal Access Token
 3. Note your **Budget ID** and **Account ID** (find these via the YNAB web app URL: `app.ynab.com/{budget_id}/accounts/{account_id}`)
 
-### 5. Import the workflow
+### 5. Import the workflows
+
+#### Cathay United Bank
 
 1. Open n8n at `http://localhost:5678`
 2. Go to **Workflows** → **Import from File**
@@ -72,6 +76,16 @@ n8n will be available at `http://localhost:5678`.
    - In the "Transform to YNAB Format" Code node: set your `YNAB_ACCOUNT_ID`
    - In the "POST to YNAB" HTTP Request node: set your `YNAB_BUDGET_ID` in the URL
 6. **Activate** the workflow
+
+#### HSBC Taiwan
+
+1. Go to **Workflows** → **Import from File**
+2. Select `workflows/hsbc-to-ynab.json`
+3. Configure the same Gmail and YNAB credentials as above
+4. Update the workflow variables (same `YNAB_ACCOUNT_ID` and `YNAB_BUDGET_ID`)
+5. **Activate** the workflow
+
+> **Note:** The HSBC parser is currently a placeholder. Once a real HSBC email sample is provided, the parser in the "Parse HSBC Email HTML" code node will be implemented.
 
 ## Testing
 
@@ -88,24 +102,40 @@ ynab-taiwan-sync/
 ├── docker-compose.yml              # Self-hosted n8n
 ├── .env.example                    # Environment variables
 ├── workflows/
-│   └── cathay-to-ynab.json         # n8n workflow (import into n8n)
+│   ├── cathay-to-ynab.json         # Cathay n8n workflow
+│   └── hsbc-to-ynab.json           # HSBC n8n workflow
 ├── src/
-│   ├── parseCathayEmail.js         # Email HTML parser
-│   └── transformToYnab.js          # YNAB format transformer
+│   ├── htmlUtils.ts                # Shared HTML utilities (stripHtml)
+│   ├── parseCathayEmail.ts         # Cathay email parser
+│   ├── parseHsbcEmail.ts           # HSBC email parser (stub)
+│   └── transformToYnab.ts          # YNAB format transformer
 └── tests/
-    ├── parseCathayEmail.test.js     # Parser tests
-    └── transformToYnab.test.js      # Transformer tests
+    ├── parseCathayEmail.test.ts     # Cathay parser tests
+    ├── parseHsbcEmail.test.ts       # HSBC parser tests
+    └── transformToYnab.test.ts      # Transformer tests
 ```
 
 ## Email Details
+
+### Cathay United Bank
 
 | Field | Value |
 |-------|-------|
 | Sender | `service@pxbillrc01.cathaybk.com.tw` |
 | Subject | `國泰世華銀行消費彙整通知` |
 | Format | HTML with `.spend_table` CSS class |
-| Frequency | Daily (consolidated) |
+| Frequency | Daily (consolidated, multiple transactions per email) |
 | Covers | Credit card and debit card transactions |
+
+### HSBC Taiwan
+
+| Field | Value |
+|-------|-------|
+| Sender | `enotification@mail.hsbc.com.tw` |
+| Subject | `匯豐銀行信用卡交易警示` |
+| Format | HTML (exact format TBD — awaiting sample) |
+| Frequency | Per-transaction (one email per transaction) |
+| Threshold | Domestic in-person >= NT$3,000; all online/overseas transactions |
 
 ## YNAB API Notes
 
